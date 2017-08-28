@@ -12,7 +12,7 @@ from oauthlib.oauth2 import TokenExpiredError
 from requests_oauthlib import OAuth2Session
 from six.moves.urllib.parse import urljoin
 
-from pymonzo.api_objects import MonzoAccount, MonzoBalance, MonzoTransaction
+from pymonzo.api_objects import MonzoAccount, MonzoBalance, MonzoTransaction, MonzoToken
 from pymonzo.exceptions import MonzoAPIException
 
 
@@ -172,6 +172,10 @@ class MonzoAPI(object):
 
         token_response = requests.post(url, data=data)
         token = token_response.json()
+        try:
+            MonzoToken(data=token)
+        except ValueError:
+            return None
 
         self._save_token_on_disk(token)
 

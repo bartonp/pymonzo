@@ -140,3 +140,28 @@ class MonzoMerchant(MonzoObject):
 
         # Map the rest of the fields automatically
         self.__dict__.update(**data)
+
+
+class MonzoToken(MonzoObject):
+    """
+    Class representation of Monzo Tokens
+    """
+    _required_keys = ['user_id', 'access_token', 'expires_in', 'token_type', 'client_id', 'refresh_token']
+
+    def __init__(self, data):
+        """
+        Takes JSON data and maps the keys as class properties, while also
+        requiring certain keys to be present to make sure we got the response
+        we wanted.
+
+        :param data: JSON data from appropriate Monzo API request
+        :type data: dict
+        """
+        print 'Getting a MonzoToken...'
+        super(MonzoToken, self).__init__(data)
+        print 'Woop!'
+        # Take care of non-usual fields
+        # None as odd...
+
+        # Map the rest of the fields automatically
+        self.__dict__.update(**data)
