@@ -25,7 +25,9 @@ MONZO_CLIENT_ID_ENV = 'MONZO_CLIENT_ID'
 MONZO_CLIENT_SECRET_ENV = 'MONZO_CLIENT_SECRET'
 
 TOKEN_FILE_NAME = '.pymonzo-token'
+TOKEN_FILE_NAME_MAC = '.pymonzo-token.db'
 TOKEN_FILE_PATH = os.path.join(os.path.expanduser('~'), TOKEN_FILE_NAME)
+TOKEN_FILE_PATH_MAC = os.path.join(os.path.expanduser('~'), TOKEN_FILE_NAME_MAC)
 
 
 class MonzoAPI(object):
@@ -84,6 +86,9 @@ class MonzoAPI(object):
             self._token = self._get_oauth_token()
         # c) token file saved on the disk
         elif os.path.isfile(TOKEN_FILE_PATH):
+            with closing(shelve.open(TOKEN_FILE_PATH)) as f:
+                self._token = ast.literal_eval(f[str('token')])
+        elif os.path.isfile(TOKEN_FILE_PATH_MAC):
             with closing(shelve.open(TOKEN_FILE_PATH)) as f:
                 self._token = ast.literal_eval(f[str('token')])
         # d) 'access_token' saved as a environment variable
