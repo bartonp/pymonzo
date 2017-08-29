@@ -111,6 +111,14 @@ class MonzoTransaction(MonzoObject):
                 not isinstance(data['merchant'], six.text_type)):
             self.merchant = MonzoMerchant(data=data.pop('merchant'))
 
+        if data.get('decline_reason'):
+            self.declined = True
+        else:
+            self.declined = False
+
+
+        self.data = data
+
         # Map the rest of the fields automatically
         self.__dict__.update(**data)
 
