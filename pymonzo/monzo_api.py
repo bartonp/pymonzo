@@ -186,7 +186,7 @@ class MonzoAPI(object):
 
         return token
 
-    def _get_response(self, method, endpoint, params=None):
+    def _get_response(self, method, endpoint, params=None, data=None):
         """
         Helper method for wading API requests, mainly for catching errors
         in one place.
@@ -201,9 +201,13 @@ class MonzoAPI(object):
         :rtype: Response
         """
         url = urljoin(API_URL, endpoint)
-
         try:
-            response = getattr(self._session, method)(url, params=params)
+            if method in ['post']:
+                response = getattr(self._session, method)(url, params=params, data=data)
+            else:
+                response = getattr(self._session, method)(url, params=params)
+            if response.status_code == 401:
+                raise TokenExpiredError()
         except TokenExpiredError:
             # For some reason 'requests-oauthlib' automatic token refreshing
             # doesn't work so we do it here semi-manually
@@ -214,7 +218,10 @@ class MonzoAPI(object):
                 token=self._token,
             )
 
-            response = getattr(self._session, method)(url, params=params)
+            if method in ['post']:
+                response = getattr(self._session, method)(url, params=params, data=data)
+            else:
+                response = getattr(self._session, method)(url, params=params)
 
         if response.status_code != requests.codes.ok:
             raise MonzoAPIException(
