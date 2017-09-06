@@ -294,7 +294,7 @@ class MonzoAPI(object):
 
         return MonzoBalance(data=response.json())
 
-    def transactions(self, account_id=None, reverse=True, limit=None):
+    def transactions(self, account_id=None, reverse=True, limit=None, since=None):
         """
         Returns a list of transactions on the user's account.
 
@@ -315,12 +315,16 @@ class MonzoAPI(object):
         elif not account_id and self.default_account_id:
             account_id = self.default_account_id
 
+        params = {'account_id': account_id}
+        if limit:
+            params['limit'] = limit
+        if since:
+            params['since'] = since
+
         endpoint = '/transactions'
         response = self._get_response(
             method='get', endpoint=endpoint,
-            params={
-                'account_id': account_id,
-            },
+            params=params
         )
 
         # The API does not allow reversing the list or limiting it, so to do
