@@ -365,3 +365,36 @@ class MonzoAPI(object):
         )
 
         return MonzoTransaction(data=response.json()['transaction'])
+
+    def feeditem(self, account_id=None, type_=None, url=None, params_={}):
+        """
+        :param account_id:
+        :param type_:
+        :param params_:
+        :return:
+        """
+
+        if not account_id and not self.default_account_id:
+            raise ValueError("You need to pass account ID")
+        elif not account_id and self.default_account_id:
+            account_id = self.default_account_id
+
+        if type_ is None:
+            type_ = 'basic'
+
+        endpoint = '/feed'
+        data = dict()
+        for k, v in params_.iteritems():
+            data['params[{}]'.format(k)] = v
+
+        params = {}
+        params['account_id'] = account_id
+        params['type'] = type_
+        if url is not None:
+            params['url'] = url
+        print data
+
+
+        response = self._get_response(
+            method='post', endpoint=endpoint, params=params, data=data
+        )
