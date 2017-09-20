@@ -3,13 +3,16 @@ from __future__ import unicode_literals
 
 import os
 import shelve
+from contextlib import closing
+import json
+import ast
 
 import requests
 from oauthlib.oauth2 import TokenExpiredError
 from requests_oauthlib import OAuth2Session
 from six.moves.urllib.parse import urljoin
 
-from pymonzo.api_objects import MonzoAccount, MonzoBalance, MonzoTransaction
+from pymonzo.api_objects import MonzoAccount, MonzoBalance, MonzoTransaction, MonzoToken
 from pymonzo.exceptions import MonzoAPIException
 
 
@@ -22,7 +25,9 @@ MONZO_CLIENT_ID_ENV = 'MONZO_CLIENT_ID'
 MONZO_CLIENT_SECRET_ENV = 'MONZO_CLIENT_SECRET'
 
 TOKEN_FILE_NAME = '.pymonzo-token'
+TOKEN_FILE_NAME_MAC = '.pymonzo-token.db'
 TOKEN_FILE_PATH = os.path.join(os.path.expanduser('~'), TOKEN_FILE_NAME)
+TOKEN_FILE_PATH_MAC = os.path.join(os.path.expanduser('~'), TOKEN_FILE_NAME_MAC)
 
 
 class MonzoAPI(object):
@@ -81,8 +86,11 @@ class MonzoAPI(object):
             self._token = self._get_oauth_token()
         # c) token file saved on the disk
         elif os.path.isfile(TOKEN_FILE_PATH):
-            with shelve.open(TOKEN_FILE_PATH) as f:
-                self._token = f['token']
+            with closing(shelve.open(TOKEN_FILE_PATH)) as f:
+                self._token = ast.literal_eval(f[str('token')])
+        elif os.path.isfile(TOKEN_FILE_PATH_MAC):
+            with closing(shelve.open(TOKEN_FILE_PATH)) as f:
+                self._token = ast.literal_eval(f[str('token')])
         # d) 'access_token' saved as a environment variable
         elif self._access_token:
             self._token = {
@@ -118,8 +126,9 @@ class MonzoAPI(object):
     @staticmethod
     def _save_token_on_disk(token):
         """Helper function that saves passed token on disk"""
-        with shelve.open(TOKEN_FILE_PATH) as f:
-            f['token'] = token
+        # with closing(shelve.open(filename)) as f:
+        with closing(shelve.open(TOKEN_FILE_PATH)) as f:
+            f[str('token')] = str(token)
 
     def _get_oauth_token(self):
         """
@@ -168,12 +177,16 @@ class MonzoAPI(object):
 
         token_response = requests.post(url, data=data)
         token = token_response.json()
+        try:
+            MonzoToken(data=token)
+        except ValueError:
+            return None
 
         self._save_token_on_disk(token)
 
         return token
 
-    def _get_response(self, method, endpoint, params=None):
+    def _get_response(self, method, endpoint, params=None, data=None):
         """
         Helper method for wading API requests, mainly for catching errors
         in one place.
@@ -188,9 +201,13 @@ class MonzoAPI(object):
         :rtype: Response
         """
         url = urljoin(API_URL, endpoint)
-
         try:
-            response = getattr(self._session, method)(url, params=params)
+            if method in ['post']:
+                response = getattr(self._session, method)(url, params=params, data=data)
+            else:
+                response = getattr(self._session, method)(url, params=params)
+            if response.status_code == 401:
+                raise TokenExpiredError()
         except TokenExpiredError:
             # For some reason 'requests-oauthlib' automatic token refreshing
             # doesn't work so we do it here semi-manually
@@ -201,7 +218,10 @@ class MonzoAPI(object):
                 token=self._token,
             )
 
-            response = getattr(self._session, method)(url, params=params)
+            if method in ['post']:
+                response = getattr(self._session, method)(url, params=params, data=data)
+            else:
+                response = getattr(self._session, method)(url, params=params)
 
         if response.status_code != requests.codes.ok:
             raise MonzoAPIException(
@@ -274,7 +294,7 @@ class MonzoAPI(object):
 
         return MonzoBalance(data=response.json())
 
-    def transactions(self, account_id=None, reverse=True, limit=None):
+    def transactions(self, account_id=None, reverse=True, limit=None, since=None):
         """
         Returns a list of transactions on the user's account.
 
@@ -295,12 +315,16 @@ class MonzoAPI(object):
         elif not account_id and self.default_account_id:
             account_id = self.default_account_id
 
+        params = {'account_id': account_id}
+        if limit:
+            params['limit'] = limit
+        if since:
+            params['since'] = since
+
         endpoint = '/transactions'
         response = self._get_response(
             method='get', endpoint=endpoint,
-            params={
-                'account_id': account_id,
-            },
+            params=params
         )
 
         # The API does not allow reversing the list or limiting it, so to do
@@ -341,3 +365,36 @@ class MonzoAPI(object):
         )
 
         return MonzoTransaction(data=response.json()['transaction'])
+
+    def feeditem(self, account_id=None, type_=None, url=None, params_={}):
+        """
+        :param account_id:
+        :param type_:
+        :param params_:
+        :return:
+        """
+
+        if not account_id and not self.default_account_id:
+            raise ValueError("You need to pass account ID")
+        elif not account_id and self.default_account_id:
+            account_id = self.default_account_id
+
+        if type_ is None:
+            type_ = 'basic'
+
+        endpoint = '/feed'
+        data = dict()
+        for k, v in params_.iteritems():
+            data['params[{}]'.format(k)] = v
+
+        params = {}
+        params['account_id'] = account_id
+        params['type'] = type_
+        if url is not None:
+            params['url'] = url
+        print data
+
+
+        response = self._get_response(
+            method='post', endpoint=endpoint, params=params, data=data
+        )
