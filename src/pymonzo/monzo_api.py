@@ -17,10 +17,7 @@ from pymonzo.api_objects import MonzoAccount, MonzoBalance, MonzoTransaction, Mo
 from pymonzo import config
 from pymonzo.exceptions import MonzoAPIException
 from pymonzo.utils import CommonMixin
-import pymonzo.logger
-
-# Logger for debugging all of the things!
-logger = pymonzo.logger.getLogger(level=pymonzo.logger.logging.DEBUG)
+from pymonzo.logger import logging
 
 
 class MonzoAPI(CommonMixin):
@@ -39,7 +36,7 @@ class MonzoAPI(CommonMixin):
 
     _cached_accounts = None
 
-    _logger = logger.getLogger('pymonzo.MonzoAPI')
+    _logger = logging.getLogger('pymonzo.MonzoAPI')
 
     def __init__(self, access_token=None, client_id=None, client_secret=None,
                  auth_code=None):
@@ -112,6 +109,8 @@ class MonzoAPI(CommonMixin):
                 "and authentication code. For more info see "
                 "https://github.com/pawelad/pymonzo#authentication"
             )
+
+        self._logger.confidential('Token: {}'.format(self._token))
 
         # Create a session with the acquired token
         self._session = OAuth2Session(

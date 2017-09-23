@@ -7,7 +7,7 @@ An - dare I say it - awesome Python Monzo public API wrapper
 from __future__ import unicode_literals
 
 from pymonzo.monzo_api import MonzoAPI  # noqa
-
+from pymonzo.logger import logging  # noqa
 
 __title__ = 'pymonzo'
 __version__ = '0.10.1.dev0'
