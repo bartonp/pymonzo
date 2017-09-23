@@ -119,9 +119,9 @@ class MonzoAPI(CommonMixin):
             token=self._token,
         )
 
-    @staticmethod
-    def _save_token_on_disk(token):
+    def _save_token_on_disk(self, token):
         """Helper function that saves passed token on disk"""
+        self._logger.debug('saving the token onto disk')
         with codecs.open(config.TOKEN_FILE_PATH, 'w', 'utf8') as f:
             json.dump(
                 token, f,
@@ -140,6 +140,7 @@ class MonzoAPI(CommonMixin):
         :returns: OAuth 2 access token
         :rtype: dict
         """
+        self._logger.debug('getting oauth token')
         url = urljoin(self.api_url, '/oauth2/token')
 
         oauth = OAuth2Session(
@@ -167,6 +168,7 @@ class MonzoAPI(CommonMixin):
         :returns: OAuth 2 access token
         :rtype: dict
         """
+        self._logger.debug('refreshing oauth token')
         url = urljoin(self.api_url, '/oauth2/token')
         data = {
             'grant_type': 'refresh_token',
@@ -179,7 +181,8 @@ class MonzoAPI(CommonMixin):
         token = token_response.json()
         try:
             MonzoToken(data=token)
-        except ValueError:
+        except ValueError as e:
+            self._logger.debug('Error getting token -> {}'.format(e.message))
             return None
 
         self._save_token_on_disk(token)
@@ -199,7 +202,7 @@ class MonzoAPI(CommonMixin):
         :returns: API response
         :rtype: Response
         """
-
+        self._logger.info('processing endpoint -> {} as a {} request'.format(endpoint, method))
         url = urljoin(self.api_url, endpoint)
 
         try:
