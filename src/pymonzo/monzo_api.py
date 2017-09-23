@@ -17,7 +17,10 @@ from pymonzo.api_objects import MonzoAccount, MonzoBalance, MonzoTransaction, Mo
 from pymonzo import config
 from pymonzo.exceptions import MonzoAPIException
 from pymonzo.utils import CommonMixin
+import pymonzo.logger
 
+# Logger for debugging all of the things!
+logger = pymonzo.logger.getLogger(level=pymonzo.logger.logging.DEBUG)
 
 
 class MonzoAPI(CommonMixin):
@@ -35,6 +38,8 @@ class MonzoAPI(CommonMixin):
     _auth_code = None
 
     _cached_accounts = None
+
+    _logger = logger.getLogger('pymonzo.MonzoAPI')
 
     def __init__(self, access_token=None, client_id=None, client_secret=None,
                  auth_code=None):
@@ -60,6 +65,7 @@ class MonzoAPI(CommonMixin):
         # Lets get the access token from:
         # a) explicitly passed 'access_token'
         if access_token:
+            self._logger.info('method a for the token - passed access_token')
             self._access_token = access_token
             self._token = {
                 'access_token': self._access_token,
@@ -67,17 +73,19 @@ class MonzoAPI(CommonMixin):
             }
         # b) explicitly passed 'client_id', 'client_secret' and 'auth_code'
         elif all([client_id, client_secret, auth_code]):
+            self._logger.info('method b for the token - passed client_id, client_secret, and auth_code')
             self._client_id = client_id
             self._client_secret = client_secret
             self._auth_code = auth_code
-
             self._token = self._get_oauth_token()
         # c) token file saved on the disk
         elif os.path.isfile(config.TOKEN_FILE_PATH):
+            self._logger.info('method c for the token - token file')
             with codecs.open(config.TOKEN_FILE_PATH, 'r', 'utf-8') as f:
                 self._token = json.load(f)
         # d) 'access_token' saved as a environment variable
         elif os.getenv(config.MONZO_ACCESS_TOKEN_ENV):
+            self._logger.info('method d for the token - passed environment ACCESS_TOKEN')
             self._access_token = os.getenv(config.MONZO_ACCESS_TOKEN_ENV)
 
             self._token = {
@@ -89,12 +97,14 @@ class MonzoAPI(CommonMixin):
         elif (os.getenv(config.MONZO_CLIENT_ID_ENV) and
                 os.getenv(config.MONZO_CLIENT_SECRET_ENV) and
                 os.getenv(config.MONZO_AUTH_CODE_ENV)):
+            self._logger.info('method e for the token - passed environment client_id, client_secret, and auth_code')
             self._client_id = os.getenv(config.MONZO_CLIENT_ID_ENV)
             self._client_secret = os.getenv(config.MONZO_CLIENT_SECRET_ENV)
             self._auth_code = os.getenv(config.MONZO_AUTH_CODE_ENV)
 
             self._token = self._get_oauth_token()
         else:
+            self._logger.debug('Authentication has failed')
             raise ValueError(
                 "To authenticate and use Monzo public API you need to pass "
                 "(or set as environment variables) either "
@@ -197,6 +207,8 @@ class MonzoAPI(CommonMixin):
                 response = getattr(self._session, method)(url, params=params, data=data)
             else:
                 response = getattr(self._session, method)(url, params=params)
+
+            self._logger.debug('response status code: {}'.format(response.status_code))
             if response.status_code == 401:
                 raise TokenExpiredError()
         except TokenExpiredError:
@@ -368,7 +380,7 @@ class MonzoAPI(CommonMixin):
 
         return MonzoTransaction(data=response.json()['transaction'])
 
-    def feeditem(self, account_id=None, type_=None, url=None, params_={}):
+    def feeditem(self, account_id=None, type_=None, url=None, params={}):
         """
         :param account_id:
         :param type_:
@@ -376,27 +388,26 @@ class MonzoAPI(CommonMixin):
         :return:
         """
 
-        if not account_id and not self.default_account_id:
-            raise ValueError("You need to pass account ID")
-        elif not account_id and self.default_account_id:
-            account_id = self.default_account_id
+        if not account_id:
+            if len(self.accounts()) == 1:
+                account_id = self.accounts()[0].id
+            else:
+                raise ValueError("You need to pass account ID")
 
         if type_ is None:
             type_ = 'basic'
 
         endpoint = '/feed'
         data = dict()
-        for k, v in params_.iteritems():
+        for k, v in params.iteritems():
             data['params[{}]'.format(k)] = v
 
-        params = {}
-        params['account_id'] = account_id
-        params['type'] = type_
+        post_params = dict()
+        post_params['account_id'] = account_id
+        post_params['type'] = type_
         if url is not None:
             params['url'] = url
-        print data
 
+        response = self._get_response(method='post', endpoint=endpoint, params=post_params, data=data)
 
-        response = self._get_response(
-            method='post', endpoint=endpoint, params=params, data=data
-        )
+        return response.json()
