@@ -382,10 +382,21 @@ class MonzoAPI(CommonMixin):
 
     def feeditem(self, account_id=None, type_=None, url=None, params={}):
         """
-        :param account_id:
-        :param type_:
-        :param params_:
-        :return:
+        Creates a feed item
+
+        Official docs:
+            https://monzo.com/docs/#create-feed-item
+
+        :param account_id: Monzo transaction ID
+        :type account_id: str
+        :param type_: notification type
+        :type type_: str
+        :param url: a url that the notification takes you to, can be none
+        :type url: str
+        :param params: parameters for the feed item
+        :type params: dict
+        :returns: None
+        :rtype: None
         """
 
         if not account_id:
@@ -408,6 +419,4 @@ class MonzoAPI(CommonMixin):
         if url is not None:
             params['url'] = url
 
-        response = self._get_response(method='post', endpoint=endpoint, params=post_params, data=data)
-
-        return response.json()
+        self._get_response(method='post', endpoint=endpoint, params=post_params, data=data)
