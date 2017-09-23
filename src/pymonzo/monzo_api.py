@@ -4,9 +4,9 @@ Monzo API related code
 """
 from __future__ import unicode_literals
 
+import codecs
+import json
 import os
-import shelve
-from contextlib import closing
 
 import requests
 from oauthlib.oauth2 import TokenExpiredError
@@ -74,9 +74,8 @@ class MonzoAPI(CommonMixin):
             self._token = self._get_oauth_token()
         # c) token file saved on the disk
         elif os.path.isfile(config.TOKEN_FILE_PATH):
-            with closing(shelve.open(config.TOKEN_FILE_PATH)) as f:
-                self._token = f[str('token')]
-
+            with codecs.open(config.TOKEN_FILE_PATH, 'r', 'utf-8') as f:
+                self._token = json.load(f)
         # d) 'access_token' saved as a environment variable
         elif os.getenv(config.MONZO_ACCESS_TOKEN_ENV):
             self._access_token = os.getenv(config.MONZO_ACCESS_TOKEN_ENV)
@@ -113,8 +112,13 @@ class MonzoAPI(CommonMixin):
     @staticmethod
     def _save_token_on_disk(token):
         """Helper function that saves passed token on disk"""
-        with closing(shelve.open(config.TOKEN_FILE_PATH)) as f:
-            f['token'] = token
+        with codecs.open(config.TOKEN_FILE_PATH, 'w', 'utf8') as f:
+            json.dump(
+                token, f,
+                ensure_ascii=False,
+                sort_keys=True,
+                indent=4,
+            )
 
     def _get_oauth_token(self):
         """
