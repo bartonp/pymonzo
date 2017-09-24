@@ -182,12 +182,14 @@ class MonzoAPI(CommonMixin):
             'refresh_token': self._token['refresh_token'],
         }
 
+        self._logger.debug('oauth post data: {}'.format(data))
         token_response = requests.post(url, data=data)
         token = token_response.json()
         try:
             MonzoToken(data=token)
         except ValueError as e:
             self._logger.debug('Error getting token -> {}'.format(e.message))
+            self._logger.debug('Token Data: {}'.format(token))
             return None
 
         self._save_token_on_disk(token)
