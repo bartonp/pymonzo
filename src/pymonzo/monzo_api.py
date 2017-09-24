@@ -59,6 +59,12 @@ class MonzoAPI(CommonMixin):
         :param auth_code: your Monzo OAuth 2 auth code
         :type auth_code: str
         """
+
+        if client_secret is not None:
+            self._client_secret = client_secret
+        if client_id is not None:
+            self._client_id = client_id
+
         # Lets get the access token from:
         # a) explicitly passed 'access_token'
         if access_token:
