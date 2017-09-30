@@ -11,5 +11,10 @@ class PyMonzoException(Exception):
 
 
 class MonzoAPIException(PyMonzoException):
+    """Monzo API response exception"""
+    pass
+
+
+class UnableToRefreshTokenException(MonzoAPIException):
     """Base Monzo API response exception"""
     pass
