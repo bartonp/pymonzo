@@ -96,11 +96,10 @@ class MonzoTransaction(MonzoObject):
             self.settled = parse_date(data.pop('settled'))
 
         # Merchant field can contain either merchant ID or the whole object
-        if (data.get('merchant') and
-                not isinstance(data['merchant'], six.text_type)):
+        if data.get('merchant') and not isinstance(data['merchant'], six.text_type):
             self.merchant = MonzoMerchant(data=data.pop('merchant'))
 
-        if data.get('decline_reason'):
+        if data.get('decline_reason'):  # Just to be able to easily get an item as declined
             self.declined = True
         else:
             self.declined = False
@@ -129,4 +128,4 @@ class MonzoToken(MonzoObject):
     """
     Class representation of Monzo Tokens
     """
-    _required_keys = ['user_id', 'access_token', 'expires_in', 'token_type', 'client_id', 'refresh_token']
+    _required_keys = ['user_id', 'access_token', 'expires_in', 'token_type', 'client_id']

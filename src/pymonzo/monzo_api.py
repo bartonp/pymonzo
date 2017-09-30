@@ -317,7 +317,7 @@ class MonzoAPI(CommonMixin):
 
         return MonzoBalance(data=response.json())
 
-    def transactions(self, account_id=None, reverse=True, limit=None, since=None):
+    def transactions(self, account_id=None, reverse=True, limit=None, since=None, expand_merchant=False):
         """
         Returns a list of transactions on the user's account.
 
@@ -344,12 +344,11 @@ class MonzoAPI(CommonMixin):
             params['limit'] = limit
         if since:
             params['since'] = since
+        if expand_merchant:
+            params['expand[]'] = 'merchant'
 
         endpoint = '/transactions'
-        response = self._get_response(
-            method='get', endpoint=endpoint,
-            params=params
-        )
+        response = self._get_response(method='get', endpoint=endpoint, params=params)
 
         # The API does not allow reversing the list or limiting it, so to do
         # the basic query of 'get the latest transaction' we need to always get
@@ -389,6 +388,7 @@ class MonzoAPI(CommonMixin):
         )
 
         return MonzoTransaction(data=response.json()['transaction'])
+
 
     def feeditem(self, account_id=None, type_=None, url=None, params={}):
         """
