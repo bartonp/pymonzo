@@ -185,6 +185,9 @@ class TestMonzoTransaction:
         expected_data['merchant'] = api_objects.MonzoMerchant(
             data=expected_data['merchant']
         )
+        expected_data['declined'] = False
+
+
         assert vars(instance) == expected_data
 
         assert isinstance(instance.created, datetime)

@@ -189,7 +189,7 @@ class MonzoAPI(CommonMixin):
             raise UnableToGetToken(
                 'Unable to get token due to no client secret being provided'
             )
-        
+
         self._logger.debug('refreshing oauth token')
 
         url = urljoin(self.api_url, '/oauth2/token')
@@ -203,12 +203,12 @@ class MonzoAPI(CommonMixin):
         self._logger.debug('oauth post data: {}'.format(data))
         token_response = requests.post(url, data=data)
         token = token_response.json()
-        try:
-            MonzoToken(data=token)
-        except ValueError as e:
-            self._logger.debug('Error getting token -> {}'.format(e.message))
-            self._logger.debug('Token Data: {}'.format(token))
-            raise UnableToRefreshTokenException("Unable to refresh the token: {}".format(token))
+        #try:
+        #    MonzoToken(data=token)
+        #except ValueError as e:
+        #    self._logger.debug('Error getting token -> {}'.format(e.message))
+        #    self._logger.debug('Token Data: {}'.format(token))
+        #    raise UnableToRefreshTokenException("Unable to refresh the token: {}".format(token))
 
         if 'error' in token:
             raise UnableToRefreshTokenException(

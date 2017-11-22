@@ -104,6 +104,9 @@ class MonzoTransaction(MonzoObject):
         else:
             self.declined = False
 
+        self.transaction_type = data.get('scheme')
+
+
 
 class MonzoMerchant(MonzoObject):
     """
