@@ -132,3 +132,20 @@ class MonzoToken(MonzoObject):
     Class representation of Monzo Tokens
     """
     _required_keys = ['user_id', 'access_token', 'expires_in', 'token_type', 'client_id']
+
+
+class MonzoPot(MonzoObject):
+    """
+    Class representation of Monzo account
+    """
+    _required_keys = ['id', 'name', 'created']
+
+    def _parse_special_fields(self, data):
+        """
+        Helper method that parses special fields to Python objects
+
+        :param data: response from Monzo API request
+        :type data: dict
+        """
+        self.created = parse_date(data.pop('created'))
+        self.updated = parse_date(data.pop('updated'))
