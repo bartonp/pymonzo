@@ -13,7 +13,8 @@ from oauthlib.oauth2 import TokenExpiredError
 from requests_oauthlib import OAuth2Session
 from six.moves.urllib.parse import urljoin
 
-from pymonzo.api_objects import MonzoAccount, MonzoBalance, MonzoTransaction, MonzoToken, MonzoPot
+from pymonzo.api_objects import MonzoAccount, MonzoBalance, MonzoTransaction
+from pymonzo.api_objects import MonzoPot
 from pymonzo import config
 from pymonzo.exceptions import MonzoAPIError, CantRefreshTokenError
 
@@ -36,6 +37,7 @@ class MonzoAPI(CommonMixin):
     _auth_code = None
 
     _cached_accounts = None
+    _cached_pots = None
 
     _logger = logging.getLogger('pymonzo.MonzoAPI')
 
@@ -165,7 +167,7 @@ class MonzoAPI(CommonMixin):
 
         oauth = OAuth2Session(
             client_id=self._client_id,
-            redirect_uri=config.PYMONZO_REDIRECT_URI,
+            redirect_uri=config.REDIRECT_URI,
         )
 
         token = oauth.fetch_token(
@@ -458,17 +460,20 @@ class MonzoAPI(CommonMixin):
         self._get_response(method='post', endpoint=endpoint, params=post_params, data=data)
 
 
-
-    def pots(self):
+    def pots(self, refresh=False):
         """
         Returns a list of pots owned by the currently authorised user.
 
         Official docs:
             https://monzo.com/docs/#pots
 
+        :param refresh: decides if the pots information should be refreshed.
+        :type refresh: bool
         :returns: list of Monzo pots
         :rtype: list of MonzoPot
         """
+        if not refresh and self._cached_pots:
+            return self._cached_pots
 
         endpoint = '/pots/listV1'
         response = self._get_response(
@@ -477,5 +482,6 @@ class MonzoAPI(CommonMixin):
 
         pots_json = response.json()['pots']
         pots = [MonzoPot(data=pot) for pot in pots_json]
+        self._cached_pots = pots
 
         return pots

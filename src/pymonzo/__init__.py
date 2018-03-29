@@ -10,7 +10,7 @@ from pymonzo.monzo_api import MonzoAPI  # noqa
 from pymonzo.logger import logging  # noqa
 
 __title__ = 'pymonzo'
-__version__ = '0.10.4.dev0'
+__version__ = '0.11.1.dev0'
 __author__ = 'Paweł Adamczak'
 __email__ = 'pawel.ad@gmail.com'
 __license__ = 'MIT License'

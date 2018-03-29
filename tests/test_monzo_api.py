@@ -10,21 +10,17 @@ import os
 import tempfile
 
 import pytest
-import six
 from six.moves.urllib.parse import urljoin
 
 from pymonzo import MonzoAPI
-from pymonzo.api_objects import (
-    MonzoAccount, MonzoBalance, MonzoTransaction, MonzoMerchant,
-)
 from pymonzo import config
+from pymonzo.api_objects import MonzoAccount, MonzoBalance, MonzoPot, MonzoTransaction
 
 
 class TestMonzoAPI:
     """
-    Test `monzo_api.MonzoAPI` class
+    Test `monzo_api.MonzoAPI` class.
     """
-
     @pytest.fixture(scope='session')
     def monzo(self):
         """Helper fixture that returns a `MonzoAPI` instance"""
@@ -49,7 +45,11 @@ class TestMonzoAPI:
         return monzo
 
     def test_class_initialization(self, monkeypatch, mocker):
-        """Test class `__init__` method"""
+        """
+        Test class `__init__` method.
+        Quite long and complicated because of the number of possible
+        scenarios. Possibly to revisit in the future.
+        """
         access_token = 'explicit_access_token'
         client_id = 'explicit_client_id'
         client_secret = 'explicit_client_secret'
@@ -223,7 +223,7 @@ class TestMonzoAPI:
 
         mocked_oauth2_session.assert_called_once_with(
             client_id=mocked_monzo._client_id,
-            redirect_uri=config.PYMONZO_REDIRECT_URI,
+            redirect_uri=config.REDIRECT_URI,
         )
         mocked_fetch_token.assert_called_once_with(
             token_url=urljoin(mocked_monzo.api_url, '/oauth2/token'),
@@ -258,83 +258,236 @@ class TestMonzoAPI:
         mocked_requests_post_json.assert_called_once_with()
         mocked_save_token_on_disk.assert_called_once_with()
 
-    @pytest.mark.vcr()
-    def test_class_whoami_method(self, monzo):
+    def test_class_whoami_method(self, mocker, mocked_monzo):
         """Test class `whoami` method"""
-        whoami = monzo.whoami()
-
-        assert whoami
-        assert isinstance(whoami, dict)
-
-        assert 'authenticated' in whoami
-        assert 'client_id' in whoami
-        assert 'user_id' in whoami
-
-    @pytest.mark.vcr()
-    def test_class_accounts_method(self, monzo):
-        """Test class `accounts` method"""
-        accounts = monzo.accounts()
-
-        assert accounts
-        assert isinstance(accounts, list)
-        assert all([isinstance(i, MonzoAccount) for i in accounts])
-
-    @pytest.mark.vcr()
-    def test_class_balance_method(self, monzo):
-        """Test class `balance` method"""
-        balance = monzo.balance()
-
-        assert balance
-        assert isinstance(balance, MonzoBalance)
-
-    @pytest.mark.vcr()
-    def test_class_transactions_method(self, monzo):
-        """Test class `transactions` method"""
-        transactions = monzo.transactions()
-
-        assert transactions
-        assert isinstance(transactions, list)
-        assert all([isinstance(t, MonzoTransaction) for t in transactions])
-
-        # Non-revered results
-        transactions_asc = monzo.transactions(reverse=False)
-
-        assert transactions_asc
-        assert isinstance(transactions_asc, list)
-        assert all([
-            isinstance(t, MonzoTransaction) for t in transactions_asc
-        ])
-
-        assert transactions == list(reversed(transactions_asc))
-
-        # Limit results
-        transactions_limit = monzo.transactions(limit=5)
-
-        assert transactions_limit
-        assert isinstance(transactions_limit, list)
-        assert all([
-            isinstance(t, MonzoTransaction)
-            for t in transactions_limit
-        ])
-        assert len(transactions_limit) == 5
-
-    @pytest.mark.vcr()
-    def test_class_transaction_method(self, monzo):
-        """Test class `transaction` method"""
-        transaction_id = 'tx_REDACTED7'
-
-        transaction = monzo.transaction(transaction_id=transaction_id)
-
-        assert transaction
-        assert isinstance(transaction, MonzoTransaction)
-        assert isinstance(transaction.merchant, six.text_type)
-
-        # Expand merchant
-        transaction_expand_merchant = monzo.transaction(
-            transaction_id=transaction_id,
-            expand_merchant=True,
+        mocked_get_response = mocker.patch(
+            'pymonzo.monzo_api.MonzoAPI._get_response',
         )
 
-        assert transaction_expand_merchant
-        assert isinstance(transaction_expand_merchant, MonzoTransaction)
-        assert isinstance(transaction_expand_merchant.merchant, MonzoMerchant)
+        result = mocked_monzo.whoami()
+
+        mocked_get_response.assert_called_once_with(
+            method='get', endpoint='/ping/whoami',
+        )
+
+        expected_result = mocked_get_response.return_value.json.return_value
+
+        assert result == expected_result
+
+    def test_class_accounts_method(self, mocker, mocked_monzo, accounts_api_response):
+        """Test class `accounts` method"""
+        mocked_get_response = mocker.patch(
+            'pymonzo.monzo_api.MonzoAPI._get_response',
+        )
+        mocked_get_response.return_value.json.return_value = accounts_api_response
+
+        assert mocked_monzo._cached_accounts is None
+
+        result = mocked_monzo.accounts()
+
+        mocked_get_response.assert_called_once_with(
+            method='get', endpoint='/accounts',
+        )
+
+        accounts_json = accounts_api_response['accounts']
+        expected_result = [
+            MonzoAccount(data=account) for account in accounts_json
+        ]
+
+        assert result == expected_result
+        assert mocked_monzo._cached_accounts == expected_result
+
+        # Calling it again should fetch '_cached_accounts'
+        mocked_get_response = mocker.patch(
+            'pymonzo.monzo_api.MonzoAPI._get_response',
+        )
+        mocked_get_response.return_value.json.return_value = accounts_api_response
+
+        result = mocked_monzo.accounts()
+
+        assert mocked_get_response.call_count == 0
+
+        assert result == mocked_monzo._cached_accounts
+
+        # But calling it with 'refresh=True' should do an API request
+        mocked_get_response = mocker.patch(
+            'pymonzo.monzo_api.MonzoAPI._get_response',
+        )
+        mocked_get_response.return_value.json.return_value = accounts_api_response
+
+        assert mocked_monzo._cached_accounts is not None
+
+        result = mocked_monzo.accounts(refresh=True)
+
+        mocked_get_response.assert_called_once_with(
+            method='get', endpoint='/accounts',
+        )
+
+        accounts_json = accounts_api_response['accounts']
+        expected_result = [
+            MonzoAccount(data=account) for account in accounts_json
+        ]
+
+        assert result == expected_result
+        assert mocked_monzo._cached_accounts == expected_result
+
+    def test_class_balance_method(self, mocker, mocked_monzo,
+                                  balance_api_response, accounts_api_response):
+        """Test class `balance` method"""
+        mocked_get_response = mocker.patch(
+            'pymonzo.monzo_api.MonzoAPI._get_response',
+        )
+        mocked_get_response.return_value.json.return_value = balance_api_response
+
+        accounts_json = accounts_api_response['accounts']
+        mocked_monzo._cached_accounts = [
+            MonzoAccount(data=account) for account in accounts_json
+        ]
+
+        result = mocked_monzo.balance()
+
+        mocked_get_response.assert_called_once_with(
+            method='get',
+            endpoint='/balance',
+            params={
+                'account_id': mocked_monzo._cached_accounts[0].id,
+            },
+        )
+
+        expected_result = MonzoBalance(balance_api_response)
+
+        assert result == expected_result
+
+        # It should raise an 'ValueError' if there more (or less) then 1 account
+        mocked_monzo._cached_accounts = mocked_monzo._cached_accounts * 2
+
+        with pytest.raises(ValueError):
+            mocked_monzo.balance()
+
+    def test_class_pots_method(self, mocker, mocked_monzo, pots_api_response):
+        """Test class `pots` method"""
+        mocked_get_response = mocker.patch(
+            'pymonzo.monzo_api.MonzoAPI._get_response',
+        )
+        mocked_get_response.return_value.json.return_value = pots_api_response
+
+        assert mocked_monzo._cached_pots is None
+
+        result = mocked_monzo.pots()
+
+        mocked_get_response.assert_called_once_with(
+            method='get', endpoint='/pots/listV1',
+        )
+
+        pots_json = pots_api_response['pots']
+        expected_result = [MonzoPot(data=pot) for pot in pots_json]
+
+        assert result == expected_result
+        assert mocked_monzo._cached_pots == expected_result
+
+        # Calling it again should fetch '_cached_pots'
+        mocked_get_response = mocker.patch(
+            'pymonzo.monzo_api.MonzoAPI._get_response',
+        )
+        mocked_get_response.return_value.json.return_value = pots_api_response
+
+        result = mocked_monzo.pots()
+
+        assert mocked_get_response.call_count == 0
+
+        assert result == mocked_monzo._cached_pots
+
+        # But calling it with 'refresh=True' should do an API request
+        mocked_get_response = mocker.patch(
+            'pymonzo.monzo_api.MonzoAPI._get_response',
+        )
+        mocked_get_response.return_value.json.return_value = pots_api_response
+
+        assert mocked_monzo._cached_pots is not None
+
+        result = mocked_monzo.pots(refresh=True)
+
+        mocked_get_response.assert_called_once_with(
+            method='get', endpoint='/pots/listV1',
+        )
+
+        pots_json = pots_api_response['pots']
+        expected_result = [MonzoPot(data=pot) for pot in pots_json]
+
+        assert result == expected_result
+        assert mocked_monzo._cached_pots == expected_result
+
+    def test_class_transactions_method(self, mocker, mocked_monzo,
+                                       transactions_api_response, accounts_api_response):
+        """Test class `transactions` method"""
+        mocked_get_response = mocker.patch(
+            'pymonzo.monzo_api.MonzoAPI._get_response',
+        )
+        mocked_get_response.return_value.json.return_value = transactions_api_response
+
+        accounts_json = accounts_api_response['accounts']
+        mocked_monzo._cached_accounts = [
+            MonzoAccount(data=account) for account in accounts_json
+        ]
+
+        result = mocked_monzo.transactions()
+
+        mocked_get_response.assert_called_once_with(
+            method='get',
+            endpoint='/transactions',
+            params={
+                'account_id': mocked_monzo._cached_accounts[0].id,
+            },
+        )
+
+        transactions_json = transactions_api_response['transactions']
+        expected_result = [
+            MonzoTransaction(data=transaction) for transaction in transactions_json
+        ]
+
+        assert result == expected_result
+
+        # It should raise an 'ValueError' if there more (or less) then 1 account
+        mocked_monzo._cached_accounts = mocked_monzo._cached_accounts * 2
+
+        with pytest.raises(ValueError):
+            mocked_monzo.transactions()
+
+    def test_class_transaction_method(self, mocker, mocked_monzo, transaction_api_response):
+        """Test class `transaction` method"""
+        mocked_get_response = mocker.patch(
+            'pymonzo.monzo_api.MonzoAPI._get_response',
+        )
+        mocked_get_response.return_value.json.return_value = transaction_api_response
+
+        result = mocked_monzo.transaction('foobar')
+
+        mocked_get_response.assert_called_once_with(
+            method='get',
+            endpoint='/transactions/foobar',
+            params={},
+        )
+
+        expected_result = MonzoTransaction(transaction_api_response['transaction'])
+
+        assert result == expected_result
+
+        # With expanded merchant info
+        mocked_get_response = mocker.patch(
+            'pymonzo.monzo_api.MonzoAPI._get_response',
+        )
+        mocked_get_response.return_value.json.return_value = transaction_api_response
+
+        result = mocked_monzo.transaction('foobar', expand_merchant=True)
+
+        mocked_get_response.assert_called_once_with(
+            method='get',
+            endpoint='/transactions/foobar',
+            params={
+                'expand[]': 'merchant',
+            },
+        )
+
+        expected_result = MonzoTransaction(transaction_api_response['transaction'])
+
+        assert result == expected_result
