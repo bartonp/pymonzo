@@ -242,6 +242,8 @@ class MonzoAPI(CommonMixin):
         try:
             if method in ['post']:
                 response = getattr(self._session, method)(url, params=params, data=data)
+            elif method in ['put']:
+                response = getattr(self._session, method)(url, data=data)
             else:
                 response = getattr(self._session, method)(url, params=params)
 
@@ -259,10 +261,7 @@ class MonzoAPI(CommonMixin):
                 token=self._token,
             )
 
-            if method in ['post']:
-                response = getattr(self._session, method)(url, params=params, data=data)
-            else:
-                response = getattr(self._session, method)(url, params=params)
+
 
         if response.status_code != requests.codes.ok:
             raise MonzoAPIError(
