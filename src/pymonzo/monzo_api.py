@@ -15,8 +15,7 @@ from six.moves.urllib.parse import urljoin
 
 from pymonzo.api_objects import MonzoAccount, MonzoBalance, MonzoTransaction, MonzoToken, MonzoPot
 from pymonzo import config
-from pymonzo.exceptions import MonzoAPIException, UnableToGetToken, \
-    UnableToRefreshTokenException
+from pymonzo.exceptions import MonzoAPIError, CantRefreshTokenError
 
 from pymonzo.utils import CommonMixin
 from pymonzo.logger import logging
@@ -78,14 +77,15 @@ class MonzoAPI(CommonMixin):
             self._client_secret = client_secret
             self._auth_code = auth_code
             self._token = self._get_oauth_token()
-        # c) token file saved on the disk with passed 'client_secret'
+            self._save_token_on_disk()
+        # c) token file saved on the disk
         elif os.path.isfile(config.TOKEN_FILE_PATH):
             self._logger.info('method c for the token - token file')
             with codecs.open(config.TOKEN_FILE_PATH, 'r', 'utf-8') as f:
                 self._token = json.load(f)
+
             self._client_id = self._token['client_id']
-            if client_secret is not None:
-                self._client_secret = client_secret
+            self._client_secret = self._token['client_secret']
         # d) 'access_token' saved as a environment variable
         elif os.getenv(config.MONZO_ACCESS_TOKEN_ENV):
             self._logger.info('method d for the token - passed environment ACCESS_TOKEN')
@@ -106,6 +106,7 @@ class MonzoAPI(CommonMixin):
             self._auth_code = os.getenv(config.MONZO_AUTH_CODE_ENV)
 
             self._token = self._get_oauth_token()
+            self._save_token_on_disk()
         else:
             self._logger.debug('Authentication has failed')
             raise ValueError(
@@ -124,9 +125,15 @@ class MonzoAPI(CommonMixin):
             token=self._token,
         )
 
-    def _save_token_on_disk(self, token):
-        """Helper function that saves passed token on disk"""
-        self._logger.debug('saving the token onto disk')
+
+    def _save_token_on_disk(self):
+        """Helper function that saves the token on disk"""
+        token = self._token.copy()
+
+        # Client secret is needed for token refreshing and isn't returned
+        # as a pared of OAuth token by default
+        token.update(client_secret=self._client_secret)
+
         with codecs.open(config.TOKEN_FILE_PATH, 'w', 'utf8') as f:
             json.dump(
                 token, f,
@@ -144,7 +151,6 @@ class MonzoAPI(CommonMixin):
 
         :returns: OAuth 2 access token
         :rtype: dict
-        :raises UnableToGetToken: when no client secret is present
         """
 
         # Check if we have a secret to generate an oauth token
@@ -168,8 +174,6 @@ class MonzoAPI(CommonMixin):
             client_secret=self._client_secret,
         )
 
-        self._save_token_on_disk(token)
-
         return token
 
     def _refresh_oath_token(self):
@@ -180,7 +184,6 @@ class MonzoAPI(CommonMixin):
             https://monzo.com/docs/#refreshing-access
 
         :raises UnableToRefreshTokenException: when token couldn't be refreshed
-        :raises UnableToGetToken: when no client secret is present
         """
 
 
@@ -189,7 +192,6 @@ class MonzoAPI(CommonMixin):
             raise UnableToGetToken(
                 'Unable to get token due to no client secret being provided'
             )
-
         self._logger.debug('refreshing oauth token')
 
         url = urljoin(self.api_url, '/oauth2/token')
@@ -210,13 +212,14 @@ class MonzoAPI(CommonMixin):
         #    self._logger.debug('Token Data: {}'.format(token))
         #    raise UnableToRefreshTokenException("Unable to refresh the token: {}".format(token))
 
+        # Not ideal, but that's how Monzo API returns errors
         if 'error' in token:
-            raise UnableToRefreshTokenException(
+            raise CantRefreshTokenError(
                 "Unable to refresh the token: {}".format(token)
             )
 
         self._token = token
-        self._save_token_on_disk(token)
+        self._save_token_on_disk()
 
     def _get_response(self, method, endpoint, params=None, data=None):
         """
@@ -260,7 +263,7 @@ class MonzoAPI(CommonMixin):
                 response = getattr(self._session, method)(url, params=params)
 
         if response.status_code != requests.codes.ok:
-            raise MonzoAPIException(
+            raise MonzoAPIError(
                 "Something went wrong: {}".format(response.json())
             )
 

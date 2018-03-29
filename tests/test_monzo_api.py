@@ -88,6 +88,9 @@ class TestMonzoAPI:
         mocked_get_oauth_token = mocker.patch(
             'pymonzo.monzo_api.MonzoAPI._get_oauth_token'
         )
+        mocked_save_token_on_disk = mocker.patch(
+            'pymonzo.monzo_api.MonzoAPI._save_token_on_disk'
+        )
         expected_token = mocked_get_oauth_token.return_value
 
         monzo = MonzoAPI(
@@ -102,6 +105,7 @@ class TestMonzoAPI:
         assert monzo._auth_code == 'explicit_auth_code'
         assert monzo._token == expected_token
         mocked_get_oauth_token.assert_called_once_with()
+        mocked_save_token_on_disk.assert_called_once_with()
         mocked_oauth2_session.assert_called_once_with(
             client_id='explicit_client_id',
             token=expected_token,
@@ -118,7 +122,7 @@ class TestMonzoAPI:
 
         assert monzo._access_token is None
         assert monzo._client_id is expected_token['client_id']
-        assert monzo._client_secret is None
+        assert monzo._client_secret is expected_token['client_secret']
         assert monzo._auth_code is None
         assert monzo._token == expected_token
         mocked_open.assert_called_once_with(
@@ -160,6 +164,9 @@ class TestMonzoAPI:
         mocked_get_oauth_token = mocker.patch(
             'pymonzo.monzo_api.MonzoAPI._get_oauth_token'
         )
+        mocked_save_token_on_disk = mocker.patch(
+            'pymonzo.monzo_api.MonzoAPI._save_token_on_disk'
+        )
         expected_token = mocked_get_oauth_token.return_value
 
         monzo = MonzoAPI()
@@ -170,6 +177,7 @@ class TestMonzoAPI:
         assert monzo._auth_code == 'env_auth_code'
         assert monzo._token == expected_token
         mocked_get_oauth_token.assert_called_once_with()
+        mocked_save_token_on_disk.assert_called_once_with()
         mocked_oauth2_session.assert_called_once_with(
             client_id='env_client_id',
             token=expected_token,
@@ -183,30 +191,31 @@ class TestMonzoAPI:
                 auth_code=auth_code, client_id=client_id,
             )
 
-    def test_class_save_token_on_disk_method(self):
+    def test_class_save_token_on_disk_method(self, monzo):
         """Test class `_save_token_on_disk` method"""
         config.TOKEN_FILE_PATH = os.path.join(
             tempfile.gettempdir(), 'pymonzo_test',
         )
-        token = {
+
+        monzo._token = {
             'foo': u'UNICODE',
             'bar': 1,
             'baz': False,
         }
 
-        MonzoAPI._save_token_on_disk(token)
+        expected_token = monzo._token.copy()
+        expected_token.update(client_secret=monzo._client_secret)
+
+        monzo._save_token_on_disk()
 
         with codecs.open(config.TOKEN_FILE_PATH, 'r', 'utf-8') as f:
-            assert token == json.load(f)
+            assert json.load(f) == expected_token
 
     def test_class_get_oauth_token_method(self, mocker, mocked_monzo):
         """Test class `_get_oauth_token` method"""
         mocked_fetch_token = mocker.MagicMock()
         mocked_oauth2_session = mocker.patch('pymonzo.monzo_api.OAuth2Session')
         mocked_oauth2_session.return_value.fetch_token = mocked_fetch_token
-        mocked_save_token_on_disk = mocker.patch(
-            'pymonzo.monzo_api.MonzoAPI._save_token_on_disk'
-        )
 
         token = mocked_monzo._get_oauth_token()
 
@@ -220,9 +229,6 @@ class TestMonzoAPI:
             token_url=urljoin(mocked_monzo.api_url, '/oauth2/token'),
             code=mocked_monzo._auth_code,
             client_secret=mocked_monzo._client_secret,
-        )
-        mocked_save_token_on_disk.assert_called_once_with(
-            mocked_fetch_token.return_value
         )
 
     def test_class_refresh_oath_token_method(self, mocker, mocked_monzo):
@@ -250,9 +256,7 @@ class TestMonzoAPI:
             data=expected_data,
         )
         mocked_requests_post_json.assert_called_once_with()
-        mocked_save_token_on_disk.assert_called_once_with(
-            mocked_requests_post_json.return_value
-        )
+        mocked_save_token_on_disk.assert_called_once_with()
 
     @pytest.mark.vcr()
     def test_class_whoami_method(self, monzo):
