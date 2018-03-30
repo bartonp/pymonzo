@@ -7,6 +7,7 @@ from __future__ import unicode_literals
 import codecs
 import json
 import os
+import uuid
 
 import requests
 from oauthlib.oauth2 import TokenExpiredError
@@ -474,7 +475,7 @@ class MonzoAPI(CommonMixin):
         if not refresh and self._cached_pots:
             return self._cached_pots
 
-        endpoint = '/pots/listV1'
+        endpoint = '/pots'
         response = self._get_response(
             method='get', endpoint=endpoint,
         )
@@ -484,3 +485,16 @@ class MonzoAPI(CommonMixin):
         self._cached_pots = pots
 
         return pots
+
+
+    def pot_deposit(self, account_id=None, pot_id=None, amount=0):
+
+        endpoint = '/pots/{pot_id}/deposit'.format(pot_id=pot_id)
+        data = {'source_account_id': account_id,
+                'amount': amount,
+                'dedupe_id': str(uuid.uuid4())}
+
+        response = self._get_response(method='put', endpoint=endpoint, data=data)
+
+        response_json = response.json()
+        return response_json

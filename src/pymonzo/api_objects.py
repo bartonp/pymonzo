@@ -154,7 +154,7 @@ class MonzoPot(MonzoObject):
     """
     Class representation of Monzo account
     """
-    _required_keys = ['id', 'name', 'created']
+    _required_keys = ['id', 'name', 'created', 'style', 'balance', 'currency', 'updated', 'deleted']
 
     def _parse_special_fields(self, data):
         """
