@@ -16,7 +16,7 @@ class MonzoObject(CommonMixin):
     """
     _required_keys = []
 
-    def __init__(self, data):
+    def __init__(self, data, client=None):
         """
         Takes Monzo API response data and maps the keys as class properties.
         It requires certain keys to be present to make sure we got the response
@@ -34,6 +34,8 @@ class MonzoObject(CommonMixin):
                 "Passed data doesn't have all required keys "
                 "(missing keys: {})".format(','.join(missing_keys))
             )
+
+        self._client = client
 
         self._raw_data = data.copy()
         data_copy = data.copy()
@@ -57,21 +59,9 @@ class MonzoAccount(MonzoObject):
     """
     _required_keys = ['id', 'description', 'created']
 
-    def _parse_special_fields(self, data):
-        """
-        Helper method that parses special fields to Python objects
-
-        :param data: response from Monzo API request
-        :type data: dict
-        """
-        self.created = parse_date(data.pop('created'))
-
-
-class MonzoPot(MonzoObject):
-    """
-    Class representation of Monzo pot
-    """
-    _required_keys = ['id', 'name', 'created']
+    def __init__(self, *args, **kwargs):
+        super(MonzoAccount, self).__init__(*args, **kwargs)
+        self.__cached_transactions = None
 
     def _parse_special_fields(self, data):
         """
@@ -81,6 +71,14 @@ class MonzoPot(MonzoObject):
         :type data: dict
         """
         self.created = parse_date(data.pop('created'))
+
+    def transactions(self, update=False):
+        if update or self.__cached_transactions is None:
+            self.__cached_transactions = self._client.transactions(account_id=self.id,
+                                                                   reverse=True,
+                                                                   expand_merchant=True)
+
+        return self.__cached_transactions
 
 
 class MonzoBalance(MonzoObject):
@@ -165,3 +163,10 @@ class MonzoPot(MonzoObject):
         """
         self.created = parse_date(data.pop('created'))
         self.updated = parse_date(data.pop('updated'))
+
+
+    def deposit(self, account_id, amount):
+        return self._client.pot_deposit(account_id=account_id, pot_id=self.id, amount=amount)
+
+    def withdraw(self, account_id, amount):
+        return self._client.pot_withdraw(account_id=account_id, pot_id=self.id, amount=amount)

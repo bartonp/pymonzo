@@ -30,15 +30,6 @@ class MonzoAPI(CommonMixin):
     Official docs:
         https://monzo.com/docs/
     """
-    api_url = 'https://api.monzo.com/'
-
-    _access_token = None
-    _client_id = None
-    _client_secret = None
-    _auth_code = None
-
-    _cached_accounts = None
-    _cached_pots = None
 
     _logger = logging.getLogger('pymonzo.MonzoAPI')
 
@@ -63,6 +54,15 @@ class MonzoAPI(CommonMixin):
         :param auth_code: your Monzo OAuth 2 auth code
         :type auth_code: str
         """
+        self.api_url = 'https://api.monzo.com/'
+
+        self._access_token = None
+        self._client_id = None
+        self._client_secret = None
+        self._auth_code = None
+
+        self._cached_accounts = None
+        self._cached_pots = None
 
         # Lets get the access token from:
         # a) explicitly passed 'access_token'
@@ -158,7 +158,7 @@ class MonzoAPI(CommonMixin):
 
         # Check if we have a secret to generate an oauth token
         if self._client_secret is None:
-            raise UnableToGetToken(
+            raise MonzoAPIError(
                 'Unable to get token due to no client secret being provided'
             )
 
@@ -192,9 +192,7 @@ class MonzoAPI(CommonMixin):
 
         # Check if we have a secret to generate an oauth token
         if self._client_secret is None:
-            raise UnableToGetToken(
-                'Unable to get token due to no client secret being provided'
-            )
+            raise MonzoAPIError('Unable to get token due to no client secret being provided')
         self._logger.debug('refreshing oauth token')
 
         url = urljoin(self.api_url, '/oauth2/token')
@@ -262,6 +260,7 @@ class MonzoAPI(CommonMixin):
                 token=self._token,
             )
 
+            self._get_response(method, endpoint, params, data)
 
 
         if response.status_code != requests.codes.ok:
@@ -311,7 +310,7 @@ class MonzoAPI(CommonMixin):
         )
 
         accounts_json = response.json()['accounts']
-        accounts = [MonzoAccount(data=account) for account in accounts_json]
+        accounts = [MonzoAccount(data=account, client=self) for account in accounts_json]
         self._cached_accounts = accounts
 
         return accounts
@@ -481,13 +480,28 @@ class MonzoAPI(CommonMixin):
         )
 
         pots_json = response.json()['pots']
-        pots = [MonzoPot(data=pot) for pot in pots_json]
+        pots = [MonzoPot(data=pot, client=self) for pot in pots_json]
         self._cached_pots = pots
 
         return pots
 
 
     def pot_deposit(self, account_id=None, pot_id=None, amount=0):
+        """
+            Deposit amount of money into a pot
+
+        Official docs:
+            https://monzo.com/docs/#deposit-into-a-pot
+
+        :param account_id: The account id to withdraw from
+        :type refresh: unicode
+        :param pot_id: The target pot id
+        :type pot_id: unicode
+        :param amount: The amount to transfer
+        :type amount: int
+        :returns: updated MonzoPot
+        :rtype: MonzoPot
+        """
 
         endpoint = '/pots/{pot_id}/deposit'.format(pot_id=pot_id)
         data = {'source_account_id': account_id,
@@ -497,4 +511,31 @@ class MonzoAPI(CommonMixin):
         response = self._get_response(method='put', endpoint=endpoint, data=data)
 
         response_json = response.json()
-        return response_json
+        return MonzoPot(data=response_json, client=self)
+
+    def pot_withdraw(self, account_id=None, pot_id=None, amount=0):
+        """
+           Withdraw money from a pot
+
+        Official docs:
+            https://monzo.com/docs/#withdraw-from-a-pot
+
+        :param account_id: The account id to deposit into
+        :type refresh: unicode
+        :param pot_id: The pot id to withdraw from
+        :type pot_id: unicode
+        :param amount: The amount to transfer
+        :type amount: int
+        :returns: updated MonzoPot
+        :rtype: MonzoPot
+        """
+
+        endpoint = '/pots/{pot_id}/withdraw'.format(pot_id=pot_id)
+        data = {'destination_account_id': account_id,
+                'amount': amount,
+                'dedupe_id': str(uuid.uuid4())}
+
+        response = self._get_response(method='put', endpoint=endpoint, data=data)
+
+        response_json = response.json()
+        return MonzoPot(data=response_json, client=self)
