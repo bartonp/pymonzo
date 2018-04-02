@@ -80,6 +80,9 @@ class MonzoAccount(MonzoObject):
 
         return self.__cached_transactions
 
+    def balance(self):
+        return self._client.balance(account_id=self.id)
+
 
 class MonzoBalance(MonzoObject):
     """
@@ -166,7 +169,18 @@ class MonzoPot(MonzoObject):
 
 
     def deposit(self, account_id, amount):
-        return self._client.pot_deposit(account_id=account_id, pot_id=self.id, amount=amount)
+        pot = self._client.pot_deposit(account_id=account_id, pot_id=self.id, amount=amount)
+        self.__update(pot)
 
     def withdraw(self, account_id, amount):
-        return self._client.pot_withdraw(account_id=account_id, pot_id=self.id, amount=amount)
+        pot = self._client.pot_withdraw(account_id=account_id, pot_id=self.id, amount=amount)
+        self.__update(pot)
+
+    def __update(self, pot):
+        self.created = pot.created
+        self.updated = pot.updated
+        data = pot._raw_data.copy()
+        data.pop('created')
+        data.pop('updated')
+        self.__dict__.update(**data)
+
